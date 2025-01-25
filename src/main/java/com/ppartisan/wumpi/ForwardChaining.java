@@ -6,15 +6,19 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.ppartisan.wumpi.Clause.satisfied;
+import static com.ppartisan.wumpi.LiteralName.WUMPUS;
 import static java.lang.System.out;
 import static java.util.function.Predicate.not;
+import static java.util.stream.Collectors.toList;
 
 final class ForwardChaining {
 
     private final List<Clause> clauses;
-    private final Set<Literal> model = new HashSet<>();
+    final Set<Literal> model = new HashSet<>();
 
     private ForwardChaining(List<Clause> clauses) {
         this.clauses = clauses;
@@ -27,9 +31,9 @@ final class ForwardChaining {
     /**
      * Version of forward chaining algorithm.
      *
-     * @return {@code true} if a model satisfies all clauses.
+     * @return A message concerning the wumpus location.
      */
-    boolean forwardChaining() {
+    String forwardChaining() {
 
         // All symbols set to false initially.
         model.clear();
@@ -49,24 +53,33 @@ final class ForwardChaining {
             fixPoint.set(true);
             clauses.stream()
                     .filter(not(Clause::isInitialFact))
-                    .filter(clause -> clause.allTrue(model))
+                    .peek(clause -> out.println("Clause: " + clause))
+                    .filter(clause -> clause.canInfer(model))
                     .forEach(addUnprocessedConsequentToModel(fixPoint));
         }
 
         // Check if all clauses are satisfied
-        if (!clauses.stream().allMatch(satisfied(model))) {
-            out.println("No models satisfy all clauses simultaneously.");
-            return false;
-        }
+        if (!clauses.stream().allMatch(satisfied(model)))
+            return "No models satisfy all clauses simultaneously.";
 
         out.println();
         out.println("Model: ");
         model.stream()
                 .sorted(Comparator.comparing(Literal::name))
-                .map(literal -> String.format("Variable %s = %s", literal.name(), model.contains(literal)))
+                .map(literal -> String.format("Variable %s = %s", literal, model.contains(literal)))
                 .forEach(out::println);
 
-        return true;
+        return toWumpusLocationMsg(model);
+    }
+
+    private static String toWumpusLocationMsg(Set<Literal> model) {
+        final List<Literal> wumpi = model.stream().filter(it -> it.name() == WUMPUS).collect(toList());
+        if(wumpi.size() > 1)
+            return "More than one possible wumpus location.";
+        else if (wumpi.isEmpty())
+            return "Could not find wumpus";
+        else
+            return String.format("Wumpus location is %s", wumpi.get(0).coordinates());
     }
 
     private Consumer<Clause> addUnprocessedConsequentToModel(AtomicBoolean fixPoint) {

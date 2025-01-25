@@ -16,7 +16,7 @@ class Clause {
         this.literals = literals;
     }
 
-    static Clause or(Literal... literals) {
+    static Clause clause(Literal... literals) {
         if (literals == null || literals.length == 0)
             return new Clause(List.of());
         return new Clause(List.of(literals));
@@ -35,12 +35,10 @@ class Clause {
         return literals.size() == 1 && literals.get(0).isPositive();
     }
 
-    /**
-     * @return {@code true} if all literals in this clause are true.
-     */
-    boolean allTrue(Set<Literal> model) {
+    boolean canInfer(Set<Literal> model) {
         return literals.stream()
                 .filter(Literal::isNegated)
+                .map(Literal::toLit)
                 .allMatch(model::contains);
     }
 
@@ -68,7 +66,7 @@ class Clause {
                 .map(String::valueOf)
                 .collect(joining(" ∧ "));
         final String consequent = literals.get(size - 1).toString();
-        return String.format("[%s ⇒ %s]", antecedent, consequent);
+        return String.format("%s ⇒ %s", antecedent, consequent);
     }
 
     @Override
