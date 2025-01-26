@@ -40,14 +40,14 @@ public class Main {
         };
     }
 
-    //ToDo - model detects wumpus at [1,2] still, but it isn't possible on a safe square.
     /**
      * +---------+---------+
      * | [1,3]   | [2,3]   |
-     * |         | Safe    |
+     * | Clean,  |         |
+     * | Safe    |         |
      * +---------+---------+
      * | [1,2]   | [2,2]   |
-     * | Safe    | Stench, |
+     * |         | Stench, |
      * |         | Safe    |
      * +---------+---------+
      * | [1,1]   | [2,1]   |
@@ -58,10 +58,13 @@ public class Main {
      */
     private static Clause[] world2() {
         return new Clause[]{
-                clause(neg(STENCH, at(2,2)), neg(STENCH, at(1,1)), lit(WUMPUS, at(2,1))),
                 clause(neg(STENCH, at(2,2)), neg(STENCH, at(1,1)), lit(WUMPUS, at(1,2))),
+                clause(neg(STENCH, at(2,2)), neg(STENCH, at(1,1)), lit(WUMPUS, at(2,1))),
+                clause(neg(SAFE, at(1,2)), lit(CLEAN, at(1,2))),
+                clause(neg(CLEAN, at(1,3)), lit(SAFE, at(2,3))),
+                clause(neg(CLEAN, at(1,3)), lit(SAFE, at(1,2))),
+                clause(lit(CLEAN, at(1,3))),
                 clause(lit(SAFE, at(1,1))),
-                clause(lit(SAFE, at(1,2))),
                 clause(lit(SAFE, at(2,2))),
                 clause(lit(SAFE, at(2,3))),
                 clause(lit(STENCH, at(1,1))),

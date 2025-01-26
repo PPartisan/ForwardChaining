@@ -1,19 +1,15 @@
 package com.ppartisan.wumpi;
 
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.function.*;
 
 import static com.ppartisan.wumpi.Clause.satisfied;
-import static com.ppartisan.wumpi.LiteralName.WUMPUS;
+import static com.ppartisan.wumpi.LiteralName.*;
+import static com.ppartisan.wumpi.Util.collect;
 import static java.lang.System.out;
 import static java.util.function.Predicate.not;
-import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.*;
 
 final class ForwardChaining {
 
@@ -69,17 +65,32 @@ final class ForwardChaining {
                 .map(literal -> String.format("Variable %s = %s", literal, model.contains(literal)))
                 .forEach(out::println);
 
-        return toWumpusLocationMsg(model);
+        return wumpusLocationMsg();
     }
 
-    private static String toWumpusLocationMsg(Set<Literal> model) {
-        final List<Literal> wumpi = model.stream().filter(it -> it.name() == WUMPUS).collect(toList());
+    private String wumpusLocationMsg() {
+        final List<Literal> wumpi = wumpi();
         if(wumpi.size() > 1)
             return "More than one possible wumpus location.";
         else if (wumpi.isEmpty())
             return "Could not find wumpus";
         else
             return String.format("Wumpus location is %s", wumpi.get(0).coordinates());
+    }
+
+    private List<Literal> wumpi() {
+        final Map<Coordinates, Set<LiteralName>> rooms = rooms();
+        // Todo - Declaring "safe" rooms in this way makes the program less flexible. It may be possible to achieve
+        // the same outcome with specifying lots of clauses and facts.
+        final Set<LiteralName> safe = EnumSet.of(CLEAN, SAFE);
+        return model.stream()
+                .filter(it -> it.name() == WUMPUS)
+                .filter(it -> rooms.get(it.coordinates()).stream().noneMatch(safe::contains))
+                .collect(toList());
+    }
+
+    private Map<Coordinates, Set<LiteralName>> rooms() {
+        return model.stream().collect(groupingBy(Literal::coordinates, collect()));
     }
 
     private Consumer<Clause> addUnprocessedConsequentToModel(AtomicBoolean fixPoint) {

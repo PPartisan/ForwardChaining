@@ -28,6 +28,6 @@ class Coordinates {
 
     @Override
     public int hashCode() {
-        return Objects.hash(col, row);
+        return Objects.hash(col, row*100);
     }
 }
