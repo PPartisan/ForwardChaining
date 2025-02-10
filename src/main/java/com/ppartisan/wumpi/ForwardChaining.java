@@ -1,90 +1,148 @@
 package com.ppartisan.wumpi;
 
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.stream.IntStream;
 
-import static com.ppartisan.wumpi.Clause.satisfied;
-import static java.lang.System.out;
-import static java.util.function.Predicate.not;
+import static java.util.Map.entry;
+import static java.util.stream.Collectors.joining;
 
-final class ForwardChaining {
+class ForwardChaining {
+    ArrayList<int[]> clauses;
 
-    private final List<Clause> clauses;
-    private final Set<Literal> model = new HashSet<>();
-
-    private ForwardChaining(List<Clause> clauses) {
-        this.clauses = clauses;
+    public ForwardChaining() {
+        clauses=new ArrayList<>();
     }
 
-    static ForwardChaining withClauses(Clause... clauses) {
-        return new ForwardChaining((clauses == null || clauses.length == 0) ? List.of() : List.of(clauses));
-    }
+    public boolean forwardChaining(Map<Integer, String> codes) {
+        // Simplified version of forward chaining algorithm: does not follow the 
+        // textbook. This implementation does not run in linear time because it 
+        // scans all clauses multiple times. 
 
-    /**
-     * Version of forward chaining algorithm.
-     *
-     * @return {@code true} if a model satisfies all clauses.
-     */
-    boolean forwardChaining() {
+        final int n = codes.keySet().stream().mapToInt(Integer::intValue).max().orElse(-1);
+        boolean[] model=new boolean[n+1];    // All symbols set to false initially.
 
-        // All symbols set to false initially.
-        model.clear();
+        //  Sanity check clauses
+        for(int i=0; i<clauses.size(); i++) {
+            int posLits=0;
+            int[] clause=clauses.get(i);
+            for (int k : clause) {
+                assert clause[i] <= n && clause[i] >= -n : "Found reference to variable larger than n.";
+                if (k > 0) {
+                    posLits++;
+                }
+            }
 
-        if (!clauses.stream().allMatch(Clause::hasOnlyOnePositiveLiteral))
-            throw new AssertionError("At most one positive literal is allowed in each clause.");
-
-        // Initialize model with unit clauses
-        withFacts(fact -> {
-            model.add(fact);
-            out.printf("Initial fact: %s\n", fact);
-        });
-
-        // Iterate through set of clauses applying modus ponens until we reach a fixpoint.
-        final AtomicBoolean fixPoint = new AtomicBoolean(false);
-        while (!fixPoint.get()) {
-            fixPoint.set(true);
-            clauses.stream()
-                    .filter(not(Clause::isInitialFact))
-                    .filter(clause -> clause.allTrue(model))
-                    .forEach(addUnprocessedConsequentToModel(fixPoint));
+            assert posLits<=1 : "At most one positive literal is allowed in each clause.";
         }
 
-        // Check if all clauses are satisfied
-        if (!clauses.stream().allMatch(satisfied(model))) {
-            out.println("No models satisfy all clauses simultaneously.");
-            return false;
+        //  Iterate through set of clauses applying modus ponens until we reach a 
+        //  fixpoint.
+        boolean fixPoint=false;
+
+        while(!fixPoint) {
+            fixPoint=true;
+
+            for (int[] clause : clauses) {
+                //  Check all symbols that appear negated in this clause.
+                //  If all true, then apply modus ponens. 
+
+                boolean allTrue = true;
+
+                for (int i : clause) {
+                    if (i < 0 && !model[-i]) {
+                        allTrue = false;
+                        break;
+                    }
+                }
+
+                if (allTrue) {
+                    boolean goalClause = true;
+                    for (int i : clause) {
+                        if (i > 0) {
+                            goalClause = false;
+                            if (!model[i]) {
+                                model[i] = true;
+                                fixPoint = false;
+                                System.out.printf(
+                                        "Inferred '%s' with clause %s\n",
+                                        codes.get(i),
+                                        IntStream.of(clause).map(Math::abs).mapToObj(codes::get).collect(joining(",", "[", "]"))
+                                );
+                            }
+
+                            break;
+                        }
+                    }
+                    if (goalClause) {
+                        // This is a goal clause
+                        System.out.println("No models satisfy all clauses simultaneously. False goal clause: " + Arrays.toString(clause));
+                        return false;
+                    }
+                }
+            }
         }
 
-        out.println();
-        out.println("Model: ");
-        model.stream()
-                .sorted(Comparator.comparing(Literal::name))
-                .map(literal -> String.format("Variable %s = %s", literal.name(), model.contains(literal)))
-                .forEach(out::println);
-
+        System.out.println();
+        for(int i = 1; i < model.length; i++) {
+            if (!model[i])
+                continue;
+            final String s = codes.getOrDefault(i, "");
+            if(s.startsWith("Wumpus_")) {
+                final int square = Integer.parseInt(s.substring(s.length() - 1));
+                final int row = ((square - 1) / 2) + 1;
+                final int col = ((square - 1) % 2) + 1;
+                System.out.printf("Wumpus is at position [%s,%s]\n", row, col);
+            }
+        }
+        System.out.println();
+        System.out.println("Done.");
         return true;
     }
 
-    private Consumer<Clause> addUnprocessedConsequentToModel(AtomicBoolean fixPoint) {
-        return clause -> clause.getFact()
-                .filter(not(model::contains))
-                .ifPresent(consequent -> {
-                    model.add(consequent);
-                    fixPoint.set(false);
-                    out.printf("Inferred %s from %s\n", consequent, clause);
-                });
+    public void addClause(int c, int... cs) {
+        final int[] clauses = IntStream.concat(
+                IntStream.of(c),
+                cs == null || cs.length == 0 ? IntStream.empty() : IntStream.of(cs)
+        ).toArray();
+        this.clauses.add(clauses);
     }
 
+    public void resetClauses() {
+        clauses.clear();
+    }
 
-    private void withFacts(Consumer<Literal> onEachFact) {
-        clauses.stream()
-                .filter(Clause::isInitialFact)
-                .map(Clause::getFactOrThrow)
-                .forEach(onEachFact);
+    public static void example() {
+
+        // The following is the CNF of Figure 7.16 in AIMA
+        // Symbols A, B, L, M, P, Q are numbered 1..6.
+        ForwardChaining fc=new ForwardChaining();
+
+        fc.addClause(-5, 6);
+        fc.addClause(-3, -4, 5);
+        fc.addClause(-2,-3,4);
+        fc.addClause(-1, -5, 3);
+        fc.addClause(-1,-2,3);
+        fc.addClause(1);
+        fc.addClause(2);
+
+        //  Call forward chaining. 6 is the number of proposition symbols, which must be
+        //  numbered 1..6.
+        final Map<Integer, String> codes = Map.ofEntries(
+                entry(1, "A"),
+                entry(2, "B"),
+                entry(3, "L"),
+                entry(4, "M"),
+                entry(5, "P"),
+                entry(6, "Q")
+        );
+        boolean modelExists = fc.forwardChaining(codes);
+        System.out.println("Model exists: "+modelExists);
+    }
+
+    public static void main(String [] args) {
+        example();
     }
 
 }

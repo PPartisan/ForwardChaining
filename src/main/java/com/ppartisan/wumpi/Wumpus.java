@@ -1,4 +1,4 @@
-package com.ppartisan.wumpi.old;
+package com.ppartisan.wumpi;
 
 import java.util.Map;
 
